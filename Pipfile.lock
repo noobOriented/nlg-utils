@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "24e4df4e2106718a0688488b476c9bb9b475d290c76b1f379453c79ac4dbe8c3"
+            "sha256": "aa1752325e31c366ca8ea60fb34e26b779572d70e13f9f7043eb3230715b1745"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -15,7 +15,16 @@
             }
         ]
     },
-    "default": {},
+    "default": {
+        "tqdm": {
+            "hashes": [
+                "sha256:0d8b5afb66e23d80433102e9bd8b5c8b65d34c2a2255b2de58d97bd2ea8170fd",
+                "sha256:f35fb121bafa030bd94e74fcfd44f3c2830039a2ddef7fc87ef1c2d205237b24"
+            ],
+            "index": "pypi",
+            "version": "==4.43.0"
+        }
+    },
     "develop": {
         "appnope": {
             "hashes": [

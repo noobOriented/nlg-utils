@@ -4,6 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+tqdm = ">=4.40.0"
 
 [dev-packages]
 ipdb = "*"
