@@ -2,7 +2,7 @@ import os
 import sys
 from unittest.mock import patch
 
-from tqdm_redirector import TqdmRedirector
+from ..tqdm_redirector import TqdmRedirector
 
 
 class TestTqdmRedirector:
