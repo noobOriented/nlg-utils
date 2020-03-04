@@ -22,24 +22,27 @@ class BLEUScoreCalculator:
             self,
             references: np.ndarray,
             max_gram: int,
-            eos_idx: int,
             *,
+            eos_idx: int = None,
             smoothing: Callable = None,
             verbose: bool = False,
             cache_dir: DirectoryHelper = None,
         ):
         self.max_gram = max_gram
-        self.eos_idx = self.INT_DTYPE(eos_idx)
+        self.eos_idx = eos_idx
         self.smoothing = smoothing
         self.verbose = verbose
         self.cache_dir = DirectoryHelper(cache_dir)
         self.cache_dir.makedirs()
 
+        self._initialize_tables(references)
+
+    def _initialize_tables(self, references):
         references = np.asarray(references, dtype=self.INT_DTYPE)
         ref_lengths = get_seqlens(references, eos_idx=self.eos_idx)
         self.ref_counters = [
             self._create_ngram_counter(n, references, ref_lengths)
-            for n in range(1, max_gram + 1)
+            for n in range(1, self.max_gram + 1)
         ]
         self.brevity_penalty = self._build_brevity_penalty_table(
             ref_lengths,

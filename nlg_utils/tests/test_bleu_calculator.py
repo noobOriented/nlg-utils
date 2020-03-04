@@ -28,7 +28,7 @@ def test_with_clipped():
         [0, 1, 1, 2, 3],  # has 2 `1`
     ]
     cand = [[1, 1, 1, 1, 1]]  # has 5 `1`
-    calculator = BLEUScoreCalculator(ref, eos_idx=EOS, max_gram=5)
+    calculator = BLEUScoreCalculator(ref, max_gram=5)
     np.testing.assert_array_almost_equal(
         calculator.calculate_batch_precision(cand),
         [[2 / 5, 1 / 4, 0, 0, 0]],
@@ -43,7 +43,7 @@ def test_with_clipped():
 def test_long():
     ref = [[0, 1, 2, 0, 1, 2, 3, 0, 1, 2]]
     cand = [[0, 1, 0, 1, 2, 1, 0, 1, 2, 3]]
-    calculator = BLEUScoreCalculator(ref, eos_idx=EOS, max_gram=4)
+    calculator = BLEUScoreCalculator(ref, max_gram=4)
     np.testing.assert_array_almost_equal(
         calculator.calculate_batch_precision(cand),
         [[
@@ -82,7 +82,7 @@ def test_with_brevity_penalty():
 def test_smoothing():
     ref = [[0, 1, 2, 3, 4]]
     smoothing = SmoothingFunction.fuzz_smoothing
-    calculator = BLEUScoreCalculator(ref, eos_idx=EOS, max_gram=4, smoothing=smoothing)
+    calculator = BLEUScoreCalculator(ref, max_gram=4, smoothing=smoothing)
     np.testing.assert_array_almost_equal(
         calculator.bleu_score([[1, 2, 0, 3, 4]]),
         [[
