@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 tqdm = ">=4.40.0"
+numpy = "*"
 
 [dev-packages]
 ipdb = "*"
