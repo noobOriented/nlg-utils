@@ -4,45 +4,6 @@ import pickle
 import numpy as np
 
 
-def safe_divide(a, b):
-    return a / np.maximum(b, 1)
-
-
-def get_seqlens(data: np.ndarray, eos_idx: int = None):
-    data = np.asarray(data, dtype=np.int)
-    maxlen = data.shape[1]
-    if eos_idx is None:
-        return np.full([data.shape[0], *data.shape[2:]], maxlen)
-    end_mask = np.equal(data, eos_idx)
-    return np.where(
-        np.any(end_mask, axis=1),
-        np.argmax(end_mask, axis=1),  # position of eos
-        maxlen,  # pad length
-    )
-
-
-def get_closest_values(arr: np.ndarray, target: np.ndarray):
-    # arr shape (M), target shape (N)
-    target = np.unique(target)
-    diff = np.abs(arr[:, np.newaxis] - target)  # shape (M, N)
-    closest_ids = np.argmin(diff, axis=-1)  # shape (M), value in [0, N)
-    return target[closest_ids]  # shape (M)
-
-
-def get_hashable_ngrams(sequence, n, start_ids=None):
-    if n == 1:  # items already hashable
-        return sequence
-
-    if start_ids is None:
-        start_ids = range(len(sequence) - n + 1)
-    step = sequence.itemsize  # number of bytes
-    sequence = sequence.tobytes()  # hashable
-    return [
-        sequence[start * step: (start + n) * step]
-        for start in start_ids
-    ]
-
-
 class DirectoryHelper:
 
     def __init__(self, arg):

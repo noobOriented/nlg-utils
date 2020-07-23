@@ -4,14 +4,7 @@ from typing import Callable, Mapping
 import numpy as np
 from tqdm import tqdm
 
-from .utils import (
-    safe_divide,
-    get_closest_values,
-    get_hashable_ngrams,
-    get_seqlens,
-    DirectoryHelper,
-    PickleCache,
-)
+from .utils import DirectoryHelper, PickleCache
 
 
 class BLEUScoreCalculator:
@@ -44,7 +37,7 @@ class BLEUScoreCalculator:
             self._create_ngram_counter(n, references, ref_lengths)
             for n in range(1, self.max_gram + 1)
         ]
-        self.brevity_penalty = self._build_brevity_penalty_table(
+        self.brevity_penalty = get_brevity_penalty_table(
             ref_lengths,
             maxlen=references.shape[1],
         )
@@ -62,16 +55,6 @@ class BLEUScoreCalculator:
                     max_count[gram] = cnt
         return max_count
 
-    @staticmethod
-    def _build_brevity_penalty_table(ref_lengths, maxlen):
-        possible_lengths = np.arange(maxlen + 1)
-        closest_lengths = get_closest_values(possible_lengths, target=ref_lengths)
-        brevity_penalty = np.minimum(
-            np.exp(1. - safe_divide(closest_lengths, possible_lengths)),
-            1.,
-        )
-        return brevity_penalty
-
     def bleu_score(self, candidates: np.ndarray) -> np.ndarray:
         candidates = np.asarray(candidates, dtype=self.INT_DTYPE)
         cand_lens = get_seqlens(candidates, eos_idx=self.eos_idx)
@@ -84,44 +67,33 @@ class BLEUScoreCalculator:
         batch_bleu = mean_precision * self.brevity_penalty[cand_lens, np.newaxis]
         return batch_bleu
 
-    def calculate_batch_precision(
-            self,
-            candidates: np.ndarray,
-            seqlens: np.ndarray = None,
-        ) -> np.ndarray:
+    def calculate_batch_precision(self, candidates, seqlens=None) -> np.ndarray:
         candidates = np.asarray(candidates, dtype=self.INT_DTYPE)
         if seqlens is None:
             seqlens = get_seqlens(candidates, eos_idx=self.eos_idx)
+
         clipped_count = np.array([
-            self.calculate_clipped_count(cand[:length])
+            self._calculate_clipped_count(cand[:length])
             for cand, length in zip(candidates, seqlens)
         ])  # shape (N, max_gram)
+
         # Total number of n-grams = Length - (n - 1)
         total_count = seqlens[:, np.newaxis] - np.arange(self.max_gram)  # shape (N, max_gram)
         if self.smoothing:
             clipped_count, total_count = self.smoothing(clipped_count, total_count)
         return safe_divide(clipped_count, total_count)  # avoid zero division
 
-    def calculate_clipped_count(self, candidate: np.ndarray) -> np.ndarray:
-        # NOTE Perform branch cut by Dynamic Programming
-        # Check the shorter gram first
-        # Check c[s:s+n+1] only if both c[s:s+n] & c[s+1:s+1+n] appear in references.
-        clipped_count = np.zeros([self.max_gram])  # 0 based
-        start_ids = range(len(candidate))
-        for n, ref_counter in enumerate(self.ref_counters, 1):
-            counter = defaultdict(int)
-            last_match_start, next_start_ids = -100, []
-            for start, gram in zip(start_ids, get_hashable_ngrams(candidate, n, start_ids)):
-                if gram in ref_counter:
-                    counter[gram] += 1
-                    if start == last_match_start + 1:
-                        next_start_ids.append(last_match_start)
-                    last_match_start = start
+    def _calculate_clipped_count(self, candidate: np.ndarray):
+        return [self._clipped_count_n(candidate, n) for n in range(1, self.max_gram + 1)]
 
-            clipped_count[n - 1] = sum(min(ref_counter[gram], cnt) for gram, cnt in counter.items())
-            start_ids = next_start_ids
-
-        return clipped_count
+    def _clipped_count_n(self, candidate, n):
+        ref_counter = self.ref_counters[n - 1]
+        counter = defaultdict(int)
+        for gram in get_hashable_ngrams(candidate, n):
+            # NOTE faster than dict.get and min
+            if gram in ref_counter and counter[gram] < ref_counter[gram]:
+                counter[gram] += 1
+        return sum(counter.values())
 
 
 class SmoothingFunction:
@@ -137,3 +109,50 @@ class SmoothingFunction:
         shift = np.ones_like(numerator)
         shift[:, 0] = 0  # don't add 1-gram
         return numerator + shift, denominator + shift
+
+
+def get_brevity_penalty_table(ref_lengths, maxlen):
+    possible_lengths = np.arange(maxlen + 1)
+    closest_lengths = get_closest_values(possible_lengths, target=ref_lengths)
+    brevity_penalty = np.minimum(
+        np.exp(1. - safe_divide(closest_lengths, possible_lengths)),
+        1.,
+    )
+    return brevity_penalty
+
+
+def safe_divide(a, b):
+    return a / np.maximum(b, 1)
+
+
+def get_seqlens(data: np.ndarray, eos_idx: int = None):
+    data = np.asarray(data, dtype=np.int)
+    maxlen = data.shape[1]
+    if eos_idx is None:
+        return np.full([data.shape[0], *data.shape[2:]], maxlen)
+    end_mask = np.equal(data, eos_idx)
+    return np.where(
+        np.any(end_mask, axis=1),
+        np.argmax(end_mask, axis=1),  # position of eos
+        maxlen,  # pad length
+    )
+
+
+def get_closest_values(arr: np.ndarray, target: np.ndarray):
+    # arr shape (M), target shape (N)
+    target = np.unique(target)
+    diff = np.abs(arr[:, np.newaxis] - target)  # shape (M, N)
+    closest_ids = np.argmin(diff, axis=-1)  # shape (M), value in [0, N)
+    return target[closest_ids]  # shape (M)
+
+
+def get_hashable_ngrams(sequence, n):
+    if n == 1:  # items already hashable
+        return sequence
+
+    width = sequence.itemsize * n
+    bytes_sequence = sequence.tobytes()  # hashable
+    return [
+        bytes_sequence[start: start + width]
+        for start in range(0, len(bytes_sequence) - width + 1, sequence.itemsize)
+    ]
